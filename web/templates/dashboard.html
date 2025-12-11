@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Arbitrage Dashboard</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <style>
+        :root {
+            --bg: #0b1020;
+            --card: #0f1629;
+            --muted: #9ca3af;
+            --accent: #22c55e;
+            --danger: #ef4444;
+            --primary: #60a5fa;
+            --border: #1f2937;
+            --text: #e5e7eb;
+            --chip: #111827;
+            --chip2: #132046;
+        }
+        body { background: var(--bg); color: var(--text); }
+        .toolbar { display: flex; justify-content: space-between; align-items: baseline; }
+        .header-title { display: flex; align-items: center; gap: 10px; font-weight: 800; }
+        .header-title .icon { font-size: 1.6rem; }
+        .user { color: var(--muted); font-size: .95rem; }
+        .card { border-radius: 18px; background: var(--card); border: 1px solid var(--border); }
+        .filters {
+            display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 12px;
+        }
+        .filters .form-select, .filters .form-control {
+            background: #0c1224; color: var(--text); border-color: var(--border);
+        }
+        .filters .form-select:focus, .filters .form-control:focus {
+            border-color: var(--primary); box-shadow: 0 0 0 .2rem rgba(96,165,250,.2);
+        }
+        .table thead { background: #121a33; color: var(--text); }
+        .table tbody tr { border-color: var(--border); }
+        .table tbody td { vertical-align: middle; }
+        .badge-ex {
+            display: inline-block; padding: 6px 10px; border-radius: 999px;
+            font-weight: 600; font-size: .85rem; background: var(--chip);
+            border: 1px solid #2b3a5f; color: var(--text);
+        }
+        .symbol-chip { background: var(--chip2); border-color: #24407a; }
+        .arrow { color: var(--primary); font-weight: 700; margin: 0 6px; }
+        .price-block { line-height: 1.5; font-size: .95rem; }
+        .price-label { font-weight: 700; color: var(--muted); }
+        .pct { font-weight: 800; color: var(--accent); }
+        .pct.bad { color: var(--danger); }
+        .numeric { font-feature-settings: "tnum"; font-variant-numeric: tabular-nums; }
+        .duration { font-size: .9rem; color: var(--muted); }
+        .ts {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: .9rem; color: #93c5fd;
+        }
+        .table-controls { display:flex; justify-content: space-between; align-items:center; margin-bottom:8px; color: var(--muted); }
+        .divider { height: 1px; background: var(--border); margin: 12px 0; }
+        .stats { display:flex; gap: 16px; margin-bottom: 8px; color: var(--muted); }
+        .stat-item { background:#0c1224; border:1px solid var(--border); border-radius:12px; padding:8px 12px; }
+    </style>
+</head>
+
+<body>
+<div class="container py-4">
+    <div class="toolbar mb-3">
+        <div class="header-title">
+            <span class="icon">📊</span>
+            <span>Арбітражна Аналітика</span>
+        </div>
+        <div class="user">Користувач: <b>{{ username }}</b></div>
+    </div>
+
+    <p class="text-muted">Історія арбітражних вікон з форматованими значеннями.</p>
+
+    <div class="card shadow-sm p-4 mb-4">
+        <div class="filters">
+            <select id="symbolFilter" class="form-select">
+                <option value="">Всі монети</option>
+                {% for s in symbols %}
+                <option value="{{ s }}">{{ s }}</option>
+                {% endfor %}
+            </select>
+            <input id="searchText" class="form-control" placeholder="Пошук по біржах/цінах/часу...">
+            <select id="spreadSort" class="form-select">
+                <option value="">Сортування</option>
+                <option value="spread_desc">Спред ↓</option>
+                <option value="spread_asc">Спред ↑</option>
+                <option value="duration_desc">Тривалість ↓</option>
+                <option value="duration_asc">Тривалість ↑</option>
+            </select>
+        </div>
+
+        <div class="table-controls">
+            <div>Останні арбітражні сесії</div>
+            <div class="stats">
+                <div class="stat-item">Фільтр: <span id="currentFilter">всі</span></div>
+                <div class="stat-item">Показано: <span id="visibleCount">0</span></div>
+            </div>
+        </div>
+        <div class="divider"></div>
+
+        {% if rows|length == 0 %}
+        <p class="text-center text-muted">Поки що немає даних.</p>
+        {% else %}
+        <div class="table-responsive">
+            <table class="table table-dark table-striped table-hover table-bordered align-middle" id="arbTable">
+                <thead>
+                <tr>
+                    <th style="width:120px">Монета</th>
+                    <th style="width:220px">Біржі</th>
+                    <th>Стартові ціни</th>
+                    <th>Фінальні ціни</th>
+                    <th style="width:140px">Макс спред</th>
+                    <th style="width:160px">Тривалість</th>
+                    <th style="width:170px">Початок</th>
+                    <th style="width:170px">Кінець</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for row in rows %}
+                    {% set pct_val = row.max_spread_value %}
+                    <tr
+                        data-symbol="{{ row.symbol }}"
+                        data-spread="{{ pct_val }}"
+                        data-duration="{{ row.duration }}"
+                    >
+                        <td><span class="badge-ex symbol-chip">{{ row.symbol }}</span></td>
+
+                        <td class="numeric">
+                            <span class="badge-ex">{{ row.ex_low }}</span>
+                            <span class="arrow">→</span>
+                            <span class="badge-ex">{{ row.ex_high }}</span>
+                        </td>
+
+                        <td class="price-block numeric">
+                            <div><span class="price-label">{{ row.ex_low }}:</span> {{ row.price_low_start }} USDT</div>
+                            <div><span class="price-label">{{ row.ex_high }}:</span> {{ row.price_high_start }} USDT</div>
+                        </td>
+
+                        <td class="price-block numeric">
+                            <div><span class="price-label">{{ row.ex_low }}:</span> {{ row.price_low_end }} USDT</div>
+                            <div><span class="price-label">{{ row.ex_high }}:</span> {{ row.price_high_end }} USDT</div>
+                        </td>
+
+                        <td class="numeric">
+                            <span class="pct {% if pct_val < 0 %}bad{% endif %}">{{ row.max_spread }}</span>
+                        </td>
+
+                        <td><span class="duration">{{ row.duration }}</span></td>
+
+                        <td><span class="ts">{{ row.start_time_fmt }}</span></td>
+                        <td><span class="ts">{{ row.end_time_fmt }}</span></td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+
+            </table>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+(function(){
+    const symbolSel = document.getElementById('symbolFilter');
+    const searchText = document.getElementById('searchText');
+    const sortSel = document.getElementById('spreadSort');
+    const table = document.getElementById('arbTable');
+    const tbody = table ? table.querySelector('tbody') : null;
+    const visibleCount = document.getElementById('visibleCount');
+    const currentFilter = document.getElementById('currentFilter');
+
+    function normalizeDurationStr(d){
+        if(!d) return 0;
+        let m = 0, s = 0;
+        const mMatch = d.match(/(\d+)\s*хв/);
+        const sMatch = d.match(/(\d+(\.\d+)?)\s*сек/);
+        if(mMatch) m = parseInt(mMatch[1], 10);
+        if(sMatch) s = parseFloat(sMatch[1]);
+        return m*60 + s;
+    }
+
+    function applyFilters(){
+        if(!tbody) return;
+        const sym = symbolSel.value.toLowerCase();
+        const q = searchText.value.toLowerCase();
+
+        let rows = Array.from(tbody.querySelectorAll('tr'));
+        let count = 0;
+
+        rows.forEach(r=>{
+            const content = r.textContent.toLowerCase();
+            const matchSym = !sym || (r.dataset.symbol && r.dataset.symbol.toLowerCase() === sym);
+            const matchText = !q || content.includes(q);
+            const visible = matchSym && matchText;
+            r.style.display = visible ? '' : 'none';
+            if(visible) count++;
+        });
+
+        if(visibleCount) visibleCount.textContent = count.toString();
+        if(currentFilter) currentFilter.textContent = sym ? sym.toUpperCase() : "всі";
+    }
+
+    function applySort(){
+        if(!tbody) return;
+        let rows = Array.from(tbody.querySelectorAll('tr')).filter(r=>r.style.display !== 'none');
+        const mode = sortSel.value;
+
+        const getSpread = r => parseFloat(r.dataset.spread || "0");
+        const getDuration = r => normalizeDurationStr(r.querySelector('.duration')?.textContent || "");
+
+        if(mode === 'spread_desc'){
+            rows.sort((a,b)=>getSpread(b)-getSpread(a));
+        } else if(mode === 'spread_asc'){
+            rows.sort((a,b)=>getSpread(a)-getSpread(b));
+        } else if(mode === 'duration_desc'){
+            rows.sort((a,b)=>getDuration(b)-getDuration(a));
+        } else if(mode === 'duration_asc'){
+            rows.sort((a,b)=>getDuration(a)-getDuration(b));
+        } else {
+            return;
+        }
+
+        rows.forEach(r=>tbody.appendChild(r));
+    }
+
+    if(symbolSel) symbolSel.addEventListener('change', ()=>{ applyFilters(); applySort(); });
+    if(searchText) searchText.addEventListener('input', ()=>{ applyFilters(); applySort(); });
+    if(sortSel) sortSel.addEventListener('change', ()=>{ applySort(); });
+
+    applyFilters();
+})();
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

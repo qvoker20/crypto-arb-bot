@@ -1,0 +1,40 @@
+body {
+    font-family: Arial;
+    background: #f4f4f4;
+    padding: 30px;
+}
+
+.box {
+    background: white;
+    padding: 25px;
+    max-width: 400px;
+    margin: auto;
+    border-radius: 8px;
+    box-shadow: 0 0 10px #aaa;
+}
+
+input {
+    width: 100%;
+    margin-bottom: 12px;
+    padding: 10px;
+}
+
+button {
+    width: 100%;
+    padding: 10px;
+    background: #1e88e5;
+    color: white;
+    border: none;
+    border-radius: 5px;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 25px;
+}
+
+td, th {
+    border: 1px solid #ccc;
+    padding: 8px;
+}
